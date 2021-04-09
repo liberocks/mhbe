@@ -10,7 +10,7 @@ export class LandmarkModel extends Document {
   @Prop({ required: true })
   y: number;
 
-  @Prop({ required: true })
+  @Prop()
   type: string;
 
   @Prop()

@@ -11,10 +11,11 @@ export class PacketModel extends Document {
   SKUCode: string;
 
   @Prop({ required: true })
-  expiredIn: number;
+  inboundDate: Date;
 
   @Prop({ required: true })
   stock: number;
+
   @Prop({ required: true })
   x: number;
 
