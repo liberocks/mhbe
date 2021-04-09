@@ -2,7 +2,9 @@ import { Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 
 import { PacketModel } from "model/packet.model";
-import { Query, Model } from "mongoose";
+import mongoose, { Query, Model, PaginateModel } from "mongoose";
+
+type PaginatedModel<T extends mongoose.Document> = PaginateModel<T>;
 
 @Injectable()
 export class PacketRepository {
@@ -38,5 +40,12 @@ export class PacketRepository {
     select?: Record<string, unknown>
   ): Query<PacketModel | null, PacketModel, unknown> {
     return this.packetModel.findById(id).select(select);
+  }
+
+  paginate(query: Record<string, any> = {}, page = 1, limit = 10) {
+    return (this.packetModel as PaginatedModel<PacketModel>).paginate(query, {
+      page,
+      limit,
+    });
   }
 }

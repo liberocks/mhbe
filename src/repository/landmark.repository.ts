@@ -2,7 +2,9 @@ import { Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 
 import { LandmarkModel } from "model/landmark.model";
-import { Query, Model } from "mongoose";
+import mongoose, { Query, Model, PaginateModel } from "mongoose";
+
+type PaginatedModel<T extends mongoose.Document> = PaginateModel<T>;
 
 @Injectable()
 export class LandmarkRepository {
@@ -38,5 +40,15 @@ export class LandmarkRepository {
     select?: Record<string, unknown>
   ): Query<LandmarkModel | null, LandmarkModel, unknown> {
     return this.landmarkModel.findById(id).select(select);
+  }
+
+  paginate(query: Record<string, any> = {}, page = 1, limit = 10) {
+    return (this.landmarkModel as PaginatedModel<LandmarkModel>).paginate(
+      query,
+      {
+        page,
+        limit,
+      }
+    );
   }
 }
