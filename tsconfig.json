@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "allowJs": true,
+    "target": "es2019",
+    "strictNullChecks": true,
+    "esModuleInterop": true,
+    "inlineSourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./src",
+    "skipLibCheck": true,
+    "incremental": true,
+    "paths": {
+      "domains/*": ["domains/*"],
+      "model/*": ["model/*"],
+      "repository/*": ["repository/*"],
+      "constants/*": ["constants/*"],
+      "common/*": ["common/*"],
+      "test/*": ["test/*"]
+    }
+  }
+}
