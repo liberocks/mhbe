@@ -316,18 +316,23 @@ export class CoreService {
         stockRemaining = 0;
       }
 
-      const packet = await this.packetRepository.create({
-        name,
-        SKUCode,
-        stock: assignedStock,
-        x: rack.x,
-        y: rack.y,
-      });
-      // .save();
-      newPackets.push(packet);
+      if (assignedStock > 0) {
+        const packet = await this.packetRepository
+          .create({
+            name,
+            SKUCode,
+            stock: assignedStock,
+            x: rack.x,
+            y: rack.y,
+          })
+          .save();
+        newPackets.push(packet);
+      }
 
-      // await rack.save();
+      await rack.save();
     }
+
+    this.packetRepository.deleteMany({ stock: 0 });
 
     return { ...routeResult, newPackets };
   }
@@ -335,7 +340,7 @@ export class CoreService {
   async getPackets(query: Record<string, any>): Promise<any> {
     const { page, page_size, ...condition } = query;
     const packets = await this.packetRepository.paginate(
-      condition,
+      { ...condition, stock: { $gt: 0 } },
       page,
       page_size
     );

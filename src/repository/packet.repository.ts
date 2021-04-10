@@ -42,6 +42,10 @@ export class PacketRepository {
     return this.packetModel.findById(id).select(select);
   }
 
+  deleteMany(condition: any) {
+    return this.packetModel.deleteMany(condition);
+  }
+
   paginate(query: Record<string, any> = {}, page = 1, limit = 10) {
     return (this.packetModel as PaginatedModel<PacketModel>).paginate(query, {
       page,
