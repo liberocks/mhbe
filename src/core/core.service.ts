@@ -7,6 +7,7 @@ import "lodash.permutations";
 import _ from "lodash";
 import { customAlphabet as nanoid } from "nanoid";
 import { HEX_ALPHA_NUMERIC } from "constants/definition.constant";
+import { LandmarkModel } from "model/landmark.model";
 
 let findMin = (a: any[], f: string) =>
   a.reduce((m, x) => (m[f] < x[f] ? m : x));
@@ -35,12 +36,13 @@ export class CoreService {
   async collectAllLandmarks(
     page_size: number,
     maximum_x: number,
-    maximum_y: number
+    maximum_y: number,
+    condition: any = { type: "wall" }
   ) {
     let landmarks: any[] = [];
 
     let landmarkIter = await this.landmarkRepository.paginate(
-      { type: { $ne: null }, x: { $lte: maximum_x }, y: { $lte: maximum_y } },
+      { ...condition, x: { $lte: maximum_x }, y: { $lte: maximum_y } },
       1,
       page_size
     );
@@ -49,7 +51,7 @@ export class CoreService {
 
     for (const page of Array.from({ length: totalPages }, (_, i) => i + 2)) {
       landmarkIter = await this.landmarkRepository.paginate(
-        { type: { $ne: null }, x: { $lte: maximum_x }, y: { $lte: maximum_y } },
+        { ...condition, x: { $lte: maximum_x }, y: { $lte: maximum_y } },
         page,
         page_size
       );
@@ -94,7 +96,7 @@ export class CoreService {
   async postRoute(body: Record<string, any>): Promise<any> {
     const {
       packet_ids = [],
-      page_size = 10,
+      page_size = 50,
       maximum_x = 75,
       maximum_y = 75,
       shape_x = 75,
@@ -166,40 +168,33 @@ export class CoreService {
   }
 
   async putLandmark(body: Record<string, any>): Promise<any> {
-    const { x, y, type } = body;
+    const { x, y, type, capacity } = body;
     let landmark = await this.landmarkRepository.findOne({ x, y });
     if (landmark) {
       landmark.x = x;
       landmark.y = y;
       landmark.type = type;
+      landmark.capacity = capacity;
       await landmark.save();
     } else {
-      landmark = await this.landmarkRepository.create({ x, y, type }).save();
+      landmark = await this.landmarkRepository
+        .create({ x, y, type, capacity })
+        .save();
     }
+
+    this.landmarkRepository.deleteMany({ type: null });
 
     return landmark?.toJSON();
   }
 
   async getLandmarks(query: Record<string, any>): Promise<any> {
-    const {
-      page_size = 10,
-      maximum_x = 75,
-      maximum_y = 75,
-      shape_x = 75,
-      shape_y = 75,
-      ...condition
-    } = query;
-    // const landmarks = await this.landmarkRepository.paginate(
-    //   { ...condition, type: { $ne: null } },
-    //   page,
-    //   page_size
-    // );
+    const { page_size = 50, maximum_x = 75, maximum_y = 75 } = query;
 
-    // return landmarks;
     const landmarks = await this.collectAllLandmarks(
       page_size,
       maximum_x,
-      maximum_y
+      maximum_y,
+      { type: { $in: ["wall", "rack"] } }
     );
 
     return landmarks;
@@ -219,8 +214,122 @@ export class CoreService {
   }
 
   async postPacket(body: Record<string, any>): Promise<any> {
-    const packet = await this.packetRepository.create(body).save();
-    return { success: true, packet: packet.toJSON() };
+    const {
+      stock,
+      name,
+      SKUCode,
+      page_size = 50,
+      maximum_x = 75,
+      maximum_y = 75,
+      shape_x = 75,
+      shape_y = 75,
+    } = body;
+
+    const nonWall = await this.collectAllLandmarks(
+      page_size,
+      maximum_x,
+      maximum_y
+    );
+
+    let maze = this.constructMaze(nonWall, shape_x, shape_y);
+
+    const rackCandidates = await this.landmarkRepository
+      .find({ type: "rack" })
+      .sort({ capacity: 1 });
+
+    if (!rackCandidates || rackCandidates.length === 0) {
+      throw new Error("No rack is available");
+    }
+
+    let racks: any[] = [];
+    let totalCapacity = 0;
+    for (const rackCandidate of rackCandidates) {
+      totalCapacity += rackCandidate.capacity;
+      racks.push(rackCandidate);
+      if (totalCapacity > stock) break;
+    }
+
+    if (totalCapacity < stock) {
+      throw new Error("No more rack space is available");
+    }
+
+    const racksIds = racks.map((landmark) => ({
+      id: landmark._id,
+      x: landmark.x,
+      y: landmark.y,
+    }));
+    const racksPermutation = (_ as any).permutations(racksIds, racksIds.length);
+
+    const routeResult: any = { alternatives: [], best: {} };
+    const planner = createPlanner(maze);
+    for (const permutation of racksPermutation) {
+      const resultCandidate = {
+        points: [permutation[0]],
+        distances: [] as number[],
+        totalDistance: 0,
+        route: [],
+        key: nanoid(HEX_ALPHA_NUMERIC, 16)(),
+      };
+
+      for (let i = 0; i < permutation.length - 1; i++) {
+        const startPoint = permutation[i];
+        const destinationPoint = permutation[i + 1];
+
+        let route = [];
+        const distance = planner.search(
+          startPoint.y,
+          startPoint.x,
+          destinationPoint.y,
+          destinationPoint.x,
+          route
+        );
+
+        resultCandidate.points.push(destinationPoint);
+        resultCandidate.distances.push(distance);
+        resultCandidate.totalDistance += distance;
+        resultCandidate.route.push(...route);
+      }
+
+      routeResult.alternatives.push(resultCandidate);
+    }
+
+    routeResult.best = findMin(routeResult.alternatives, "totalDistance");
+    routeResult.alternatives = routeResult.alternatives.filter(
+      (alternative: any) => alternative.key !== routeResult.best.key
+    );
+
+    let stockRemaining = stock;
+    const newPackets: any[] = [];
+    for (const rackCandidate of rackCandidates) {
+      const rack = (await this.landmarkRepository.findById(
+        rackCandidate.id
+      )) as LandmarkModel;
+
+      let assignedStock = 0;
+      if (stockRemaining > rack.capacity) {
+        assignedStock += rack.capacity;
+        stockRemaining -= rack.capacity;
+        rack.capacity = 0;
+      } else {
+        assignedStock += stockRemaining;
+        rack.capacity -= stockRemaining;
+        stockRemaining = 0;
+      }
+
+      const packet = await this.packetRepository.create({
+        name,
+        SKUCode,
+        stock: assignedStock,
+        x: rack.x,
+        y: rack.y,
+      });
+      // .save();
+      newPackets.push(packet);
+
+      // await rack.save();
+    }
+
+    return { ...routeResult, newPackets };
   }
 
   async getPackets(query: Record<string, any>): Promise<any> {

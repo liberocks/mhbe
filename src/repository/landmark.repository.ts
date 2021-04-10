@@ -42,6 +42,10 @@ export class LandmarkRepository {
     return this.landmarkModel.findById(id).select(select);
   }
 
+  deleteMany(condition: any) {
+    return this.landmarkModel.deleteMany(condition);
+  }
+
   paginate(query: Record<string, any> = {}, page = 1, limit = 10) {
     return (this.landmarkModel as PaginatedModel<LandmarkModel>).paginate(
       query,

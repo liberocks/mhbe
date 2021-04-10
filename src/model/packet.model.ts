@@ -11,9 +11,6 @@ export class PacketModel extends Document {
   SKUCode: string;
 
   @Prop({ required: true })
-  inboundDate: Date;
-
-  @Prop({ required: true })
   stock: number;
 
   @Prop({ required: true })
