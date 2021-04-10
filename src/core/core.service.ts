@@ -58,7 +58,11 @@ export class CoreService {
 
     return [
       ...new Set(
-        landmarks.map((landmark) => ({ x: landmark.x, y: landmark.y }))
+        landmarks.map((landmark) => ({
+          x: landmark.x,
+          y: landmark.y,
+          type: landmark.type,
+        }))
       ),
     ];
   }
@@ -91,10 +95,10 @@ export class CoreService {
     const {
       packet_ids = [],
       page_size = 10,
-      maximum_x = 300,
-      maximum_y = 300,
-      shape_x = 300,
-      shape_y = 300,
+      maximum_x = 75,
+      maximum_y = 75,
+      shape_x = 75,
+      shape_y = 75,
     } = body;
     const landmarks = await this.collectAllLandmarks(
       page_size,
@@ -177,11 +181,25 @@ export class CoreService {
   }
 
   async getLandmarks(query: Record<string, any>): Promise<any> {
-    const { page, page_size, ...condition } = query;
-    const landmarks = await this.landmarkRepository.paginate(
-      condition,
-      page,
-      page_size
+    const {
+      page_size = 10,
+      maximum_x = 75,
+      maximum_y = 75,
+      shape_x = 75,
+      shape_y = 75,
+      ...condition
+    } = query;
+    // const landmarks = await this.landmarkRepository.paginate(
+    //   { ...condition, type: { $ne: null } },
+    //   page,
+    //   page_size
+    // );
+
+    // return landmarks;
+    const landmarks = await this.collectAllLandmarks(
+      page_size,
+      maximum_x,
+      maximum_y
     );
 
     return landmarks;
@@ -192,6 +210,10 @@ export class CoreService {
       x: parseInt(x),
       y: parseInt(y),
     });
+
+    if (!landmark) {
+      return { x: parseInt(x), y: parseInt(y), type: null };
+    }
 
     return landmark?.toJSON();
   }
